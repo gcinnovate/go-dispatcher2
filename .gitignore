@@ -4,6 +4,16 @@
 *.dll
 *.so
 *.dylib
+go-dispatcher2
+test-smtp
+dist
+.vscode
+.envrc
+docs/*
+docs
+
+.DS_Store
+_storage/
 
 # Test binary, built with `go test -c`
 *.test
@@ -13,3 +23,7 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+
+# GoLand config folder
+.idea/
