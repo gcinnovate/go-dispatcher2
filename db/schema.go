@@ -12,6 +12,7 @@ CREATE EXTENSION IF NOT EXISTS plpython3u;
 CREATE EXTENSION xml2;
 CREATE TABLE servers(
     id serial PRIMARY KEY NOT NULL,
+	uid TEXT NOT NULL DEFAULT '', 
     name text NOT NULL UNIQUE,
     username text NOT NULL DEFAULT '',
     password text NOT NULL DEFAULT '',
@@ -49,6 +50,7 @@ CREATE VIEW servers_view AS
 
 CREATE TABLE requests(
     id bigserial PRIMARY KEY NOT NULL,
+	uid TEXT NOT NULL DEFAULT '', 
     source INTEGER REFERENCES servers(id), -- source app/server
     destination INTEGER REFERENCES servers(id), -- source app/server
     body TEXT NOT NULL DEFAULT '',
@@ -61,9 +63,10 @@ CREATE TABLE requests(
     retries INTEGER NOT NULL DEFAULT 0,
     errors TEXT DEFAULT '', -- indicative response message
     submissionid INTEGER NOT NULL DEFAULT 0, -- message_id in source app -> helpful when check for already sent submissions
+    period TEXT DEFAULT '', -- period
     week TEXT DEFAULT '', -- reporting week
     month TEXT DEFAULT '', -- reporting month
-    year INTEGER, -- year of submission
+    year TEXT, -- year of submission
     msisdn TEXT NOT NULL DEFAULT '', -- can be report sender in source
     raw_msg TEXT NOT NULL DEFAULT '', -- raw message in source system
     facility TEXT NOT NULL DEFAULT '', -- facility owning report
@@ -151,6 +154,7 @@ CREATE TABLE user_role_permissions (
 
 CREATE TABLE users (
     id bigserial NOT NULL PRIMARY KEY,
+	uid TEXT NOT NULL DEFAULT '', 
     firstname TEXT NOT NULL,
     lastname TEXT NOT NULL,
     username TEXT NOT NULL UNIQUE,
@@ -316,10 +320,10 @@ var keyTables = []string{
 func init() {
 	log.Printf(
 		"Trying to initialize database schema. check tables %v", strings.Join(keyTables, ", "))
-	check_tables()
+	checkTables()
 }
 
-func check_tables() int {
+func checkTables() int {
 	dbconn := GetDB()
 
 	keyTableMissing := false

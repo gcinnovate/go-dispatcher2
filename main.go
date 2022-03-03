@@ -124,7 +124,7 @@ func main() {
 	}
 	// Do the HTTP Requests Here
 	router := gin.Default()
-	v1 := router.Group("/api/v1")
+	v1 := router.Group("/api")
 	{
 		v1.GET("/test", func(c *gin.Context) {
 			c.JSON(200, gin.H{
@@ -133,11 +133,18 @@ func main() {
 		})
 	}
 
-	v2 := router.Group("/api/v1", basicAuth())
+	v2 := router.Group("/api", basicAuth())
 	{
 		v2.GET("/test2", func(c *gin.Context) {
 			c.String(200, "Authorized")
 		})
+
+		rp := new(controllers.RapidProController)
+		v2.POST("/rp-queue", rp.RapidProQueue)
+
+		q := new(controllers.QueueController)
+		v2.POST("/queue", q.Queue)
+
 	}
 
 	// Handle error response when a route is not defined
@@ -153,6 +160,7 @@ func main() {
 func basicAuth() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
+		c.Set("dbConn", db.GetDB())
 		auth := strings.SplitN(c.Request.Header.Get("Authorization"), " ", 2)
 
 		if len(auth) != 2 || auth[0] != "Basic" {
@@ -176,8 +184,11 @@ func authenticateUser(username, password string) bool {
 	log.Printf("Username:%s, password:%s", username, password)
 	userObj := models.User{}
 	err := db.GetDB().QueryRowx(
-		"SELECT id, username, name, phone, email FROM users "+
-			"WHERE username = $1 AND password = crypt($2, password) ",
+		`SELECT 
+			id, username, firstname, lastname , telephone, email 
+		FROM users 
+		WHERE 
+			username = $1 AND password = crypt($2, password)`,
 		username, password).StructScan(&userObj)
 	if err != nil {
 		fmt.Printf("User:[%v]", err)

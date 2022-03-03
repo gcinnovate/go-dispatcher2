@@ -27,3 +27,6 @@ _storage/
 
 # GoLand config folder
 .idea/
+
+# old files
+*.old
