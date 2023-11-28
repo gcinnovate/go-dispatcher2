@@ -7,7 +7,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq" //import postgres
 
-	"github.com/gcinnovate/go-dispatcher2/config"
+	"go-dispatcher2/config"
 )
 
 var db *sqlx.DB
@@ -33,7 +33,7 @@ func ConnectDB(dataSourceName string) (*sqlx.DB, error) {
 	return db, nil
 }
 
-//GetDB ...
+// GetDB ...
 func GetDB() *sqlx.DB {
 	return db
 }

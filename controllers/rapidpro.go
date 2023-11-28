@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/gcinnovate/go-dispatcher2/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
+	"go-dispatcher2/utils"
 )
 
 type dhis2Payload struct {
@@ -59,7 +59,7 @@ func (r *RapidProController) RapidProQueue(c *gin.Context) {
 	if err != nil {
 		fmt.Printf("%v", err)
 	}
-	fmt.Printf("Go The request from DB => %v", utils.GetUID())
+	fmt.Printf("Got The request from DB => %v", utils.GetUID())
 
 	var payload dhis2Payload
 

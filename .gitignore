@@ -30,3 +30,5 @@ _storage/
 
 # old files
 *.old
+
+dist/

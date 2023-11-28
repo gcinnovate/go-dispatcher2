@@ -1,0 +1,13 @@
+database:
+  uri: postgres://postgres:postgres@localhost/integrator?sslmode=disable
+api:
+    username: 13492180369810788842
+    password: WFkbM8sRV3k6W2rNJze5
+    authtoken: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjo0NCwidXNlcm5hbWUiOiJjYXJvbGluZS5uYW11d2VuamVAaGVhbHRoLmdvLnVnIiwiZXhwIjoxNjAxMDI1MDQwLCJlbWFpbCI6ImNhcm9saW5lLm5hbXV3ZW5qZUBoZWFsdGguZ28udWciLCJvcmlnX2lhdCI6MTYwMDQyMDI0MH0.ugs9g1xRj875zcZiQm3r6sx9KGjDTM9VuZ5JlYnnwEM
+    mourl: https://fc.gcinnovate.com/handlers/external/received/800a0f95-6ae0-414f-9c7b-dd1f65a9e206/
+    smsurl: https://msdg.uconnect.go.ug/api/v1/sms
+    rooturi: https://msdg.uconnect.go.ug/api/v1
+    email: caroline.namuwenje@health.go.ug
+    shortcode_uid: 735324584479691241
+server:
+    port: 5002
