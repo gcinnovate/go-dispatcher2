@@ -14,13 +14,19 @@ builds:
       - linux
       - windows
       - darwin
+    binary: dispatcher2go
 archives:
-  - replacements:
-      darwin: Darwin
-      linux: Linux
-      windows: Windows
-      386: i386
-      amd64: x86_64
+  # - replacements:
+  #     darwin: Darwin
+  #     linux: Linux
+  #     windows: Windows
+  #     386: i386
+  #     amd64: x86_64
+  - files:
+      - README.md
+      - db/**/*.sql
+      - docs/**/*
+
 checksum:
   name_template: 'checksums.txt'
 snapshot:
@@ -29,5 +35,6 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
+      # - '^docs:'
       - '^test:'
+

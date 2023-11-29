@@ -145,6 +145,7 @@ type Config struct {
 		StartOfSubmissionPeriod string `mapstructure:"start_submission_period" env:"START_SUBMISSION_PERIOD" env-default:"18"`
 		EndOfSubmissionPeriod   string `mapstructure:"end_submission_period" env:"END_SUBMISSION_PERIOD" env-default:"24"`
 		MaxConcurrent           int    `mapstructure:"max_concurrent" env:"DISPATCHER2_MAX_CONCURRENT" env-default:"5"`
+		RetryCronExpression     string `mapstructure:"retry_cron_expression"  env:"RETRY_CRON_EXPRESSION" env-description:"The request retry Cron Expression" env-default:"*/5 * * * *"`
 		RequestProcessInterval  int    `mapstructure:"request_process_interval" env:"REQUEST_PROCESS_INTERVAL" env-default:"4"`
 		LogDirectory            string `mapstructure:"logdir" env:"DISPATCHER2_LOGDIR" env-default:"/var/log/dispatcher2"`
 		UseSSL                  string `mapstructure:"use_ssl" env:"DISPATCHER2_USE_SSL" env-default:""`
@@ -154,10 +155,9 @@ type Config struct {
 	} `yaml:"server"`
 
 	API struct {
-		Email               string `yaml:"email" env:"DISPATCHER2_EMAIL" env-description:"API user email address"`
-		RetryCronExpression string `mapstructure:"retry_cron_expression"  env:"RETRY_CRON_EXPRESSION" env-description:"The request retry Cron Expression" env-default:"*/5 * * * *"`
-		AuthToken           string `yaml:"authtoken" env:"RAPIDPRO_AUTH_TOKEN" env-description:"API JWT authorization token"`
-		SmsURL              string `yaml:"smsurl" env:"SMS_URL" env-description:"API SMS endpoint"`
+		Email     string `yaml:"email" env:"DISPATCHER2_EMAIL" env-description:"API user email address"`
+		AuthToken string `yaml:"authtoken" env:"RAPIDPRO_AUTH_TOKEN" env-description:"API JWT authorization token"`
+		SmsURL    string `yaml:"smsurl" env:"SMS_URL" env-description:"API SMS endpoint"`
 	} `yaml:"api"`
 }
 

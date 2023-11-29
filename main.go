@@ -47,9 +47,9 @@ func main() {
 		// Schedule the task to run "30 minutes after midn, 4am, 8am, 12pm..., everyday"
 
 		// retrying incomplete requests runs every 5 minutes
-		log.WithFields(log.Fields{"RetryCronExpression": config.Dispatcher2Conf.API.RetryCronExpression}).Info(
+		log.WithFields(log.Fields{"RetryCronExpression": config.Dispatcher2Conf.Server.RetryCronExpression}).Info(
 			"Request Retry Cron Expression")
-		_, err = s.Cron(config.Dispatcher2Conf.API.RetryCronExpression).Do(RetryIncompleteRequests)
+		_, err = s.Cron(config.Dispatcher2Conf.Server.RetryCronExpression).Do(RetryIncompleteRequests)
 		if err != nil {
 			log.WithError(err).Error("Error scheduling incomplete request retry task:")
 		}

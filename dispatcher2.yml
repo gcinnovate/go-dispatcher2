@@ -1,0 +1,20 @@
+database:
+  uri: "postgres://postgres:postgres@localhost/dispatcher2go?sslmode=disable"
+  db_host: "localhost"
+  db_port: "5432"
+  db_username: "postgres"
+  db_password: "postgres"
+
+server:
+  host: "localhost"
+  http_port: 9090
+  max_retries: 3
+  max_concurrent: 8
+  sync_on: true
+  request_process_interval: 5
+  logdir: "/tmp"
+
+api:
+  retry_cron_expression: "0 * * * *"
+  authtoken: "ABC"
+  smsurl: ""
