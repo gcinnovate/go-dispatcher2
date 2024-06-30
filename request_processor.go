@@ -18,6 +18,7 @@ import (
 	"go-dispatcher2/utils/dbutils"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,19 @@ type ServerStatus struct {
 	StatusCode string               `json:"statuscode,omitempty"`
 	Response   string               `json:"response,omitempty"`
 	Errors     string               `json:"errors"`
+}
+
+// AddParamsToURL takes a URL and add extra parameters to it from dbutils.MapAnything
+// check whether URL doesn't contain ? at the end before adding parameters, if so simply add parameters
+func AddParamsToURL(myURL string, params dbutils.MapAnything) string {
+	if !strings.HasSuffix(myURL, "?") {
+		myURL = myURL + "?"
+	}
+	p := url.Values{}
+	for k, v := range params {
+		p.Add(k, fmt.Sprintf("%v", v))
+	}
+	return myURL + p.Encode()
 }
 
 // Scan is the db driver scanner for ServerStatus
@@ -343,6 +357,12 @@ func (r *RequestObject) sendRequest(destination models.Server) (*http.Response, 
 	if len(r.URLSurffix) > 1 {
 		destURL += r.URLSurffix
 	}
+	completeURL := AddParamsToURL(destURL, destination.URLParams())
+	log.WithFields(log.Fields{
+		"request": r.ID,
+		"server":  destination.ID(),
+		"url":     completeURL,
+	}).Info("Sending request to destination server")
 	req, err := http.NewRequest(destination.HTTPMethod(), destURL, bytes.NewReader(marshalled))
 
 	switch destination.AuthMethod() {
@@ -439,8 +459,10 @@ func Produce(db *sqlx.DB, jobs chan<- int, wg *sync.WaitGroup, mutex *sync.Mutex
 		}
 		_ = rows.Close()
 
-		log.WithField("requestsAdded", requestsCount).Info("Fetched Requests")
-		log.Info(fmt.Sprintf("Going to sleep for: %v", config.Dispatcher2Conf.Server.RequestProcessInterval))
+		if requestsCount > 0 {
+			log.WithField("requestsAdded", requestsCount).Info("Fetched Requests")
+		}
+		log.Info(fmt.Sprintf("Requests producer going to sleep for: %v", config.Dispatcher2Conf.Server.RequestProcessInterval))
 		// Not good enough but let's bare with the sleep this initial version
 		time.Sleep(
 			time.Duration(config.Dispatcher2Conf.Server.RequestProcessInterval) * time.Second)
@@ -665,14 +687,14 @@ func StartConsumers(jobs <-chan int, wg *sync.WaitGroup, mutex *sync.RWMutex, se
 
 	dbURI := config.Dispatcher2Conf.Database.URI
 
-	fmt.Printf("Going to create %d Consumers!!!!!\n", config.Dispatcher2Conf.Server.MaxConcurrent)
+	log.Info(fmt.Sprintf("Going to create %d Consumers!!!!!\n", config.Dispatcher2Conf.Server.MaxConcurrent))
 	for i := 1; i <= config.Dispatcher2Conf.Server.MaxConcurrent; i++ {
 
 		newConn, err := sqlx.Connect("postgres", dbURI)
 		if err != nil {
 			log.Fatalln("Request processor failed to connect to database: %v", err)
 		}
-		fmt.Printf("Adding Consumer: %d\n", i)
+		log.Info(fmt.Sprintf("Adding Request Consumer: %d\n", i))
 		wg.Add(1)
 		go Consume(newConn, i, jobs, wg, mutex, seedMap)
 	}

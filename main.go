@@ -82,12 +82,26 @@ func main() {
 		wg.Add(1)
 		go StartConsumers(jobs, &wg, rWMutex, seenMap)
 	}
+	scheduledJobs := make(chan int64)
+	workingOn := make(map[int64]bool)
+	var workingOnMutex = &sync.RWMutex{}
+
+	if !*config.SkipScheduleProcessing {
+		wg.Add(1)
+		go ProduceSchedules(dbConn, scheduledJobs, &wg, workingOnMutex, workingOn)
+
+		wg.Add(1)
+		go StartScheduleConsumers(scheduledJobs, &wg, workingOnMutex, workingOn)
+
+	}
 
 	// Start the backend API gin server
 	wg.Add(1)
 	go startAPIServer(&wg)
 
 	wg.Wait()
+	close(scheduledJobs)
+	close(jobs)
 }
 
 func startAPIServer(wg *sync.WaitGroup) {
@@ -99,6 +113,11 @@ func startAPIServer(wg *sync.WaitGroup) {
 			c.String(200, "Authorized")
 		})
 
+		tk := new(controllers.TokenController)
+		v2.GET("/getToken", tk.GetActiveToken)
+		v2.GET("/generateToken", tk.GenerateNewToken)
+		v2.DELETE("/deleteTokens", tk.DeleteInactiveTokens)
+
 		q := new(controllers.QueueController)
 		v2.POST("/queue", q.Queue)
 		v2.GET("/queue", q.Requests)
@@ -108,6 +127,12 @@ func startAPIServer(wg *sync.WaitGroup) {
 		//s := new(controllers.ServerController)
 		//v2.POST("/servers", s.CreateServer)
 		//v2.POST("/importServers", s.ImportServers)
+		s := new(controllers.ScheduleController)
+		v2.GET("/schedules", s.ListSchedules)
+		v2.POST("/schedules", s.NewSchedule)
+		v2.GET("/schedules/:id", s.GetSchedule)
+		v2.POST("/schedules/:id", s.UpdateSchedule)
+		v2.DELETE("/schedules/:id", s.DeleteSchedule)
 
 	}
 	// Handle error response when a route is not defined

@@ -20,6 +20,7 @@ import (
 // Dispatcher2Conf is the global conf
 var Dispatcher2Conf Config
 var SkipRequestProcessing *bool
+var SkipScheduleProcessing *bool
 var ServersConfigMap = make(map[string]ServerConf)
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 		"The path to the configuration file of the application")
 
 	SkipRequestProcessing = flag.Bool("skip-request-processing", false, "Whether to skip requests processing")
+	SkipScheduleProcessing = flag.Bool("skip-schedule-processing", false, "Whether to skip schedule processing")
 
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
@@ -138,20 +140,22 @@ type Config struct {
 	} `yaml:"database"`
 
 	Server struct {
-		Host                    string `mapstructure:"host" env:"DISPATCHER2_HOST" env-default:"localhost"`
-		Port                    string `mapstructure:"http_port" env:"DISPATCHER2_SERVER_PORT" env-description:"Server port" env-default:"9090"`
-		ProxyPort               string `mapstructure:"proxy_port" env:"DISPATCHER2_PROXY_PORT" env-description:"Server port" env-default:"9191"`
-		MaxRetries              int    `mapstructure:"max_retries" env:"DISPATCHER2_MAX_RETRIES" env-default:"3"`
-		StartOfSubmissionPeriod string `mapstructure:"start_submission_period" env:"START_SUBMISSION_PERIOD" env-default:"18"`
-		EndOfSubmissionPeriod   string `mapstructure:"end_submission_period" env:"END_SUBMISSION_PERIOD" env-default:"24"`
-		MaxConcurrent           int    `mapstructure:"max_concurrent" env:"DISPATCHER2_MAX_CONCURRENT" env-default:"5"`
-		RetryCronExpression     string `mapstructure:"retry_cron_expression"  env:"RETRY_CRON_EXPRESSION" env-description:"The request retry Cron Expression" env-default:"*/5 * * * *"`
-		RequestProcessInterval  int    `mapstructure:"request_process_interval" env:"REQUEST_PROCESS_INTERVAL" env-default:"4"`
-		LogDirectory            string `mapstructure:"logdir" env:"DISPATCHER2_LOGDIR" env-default:"/var/log/dispatcher2"`
-		UseSSL                  string `mapstructure:"use_ssl" env:"DISPATCHER2_USE_SSL" env-default:""`
-		SSLClientCertKeyFile    string `mapstructure:"ssl_client_certkey_file" env:"SSL_CLIENT_CERTKEY_FILE" env-default:""`
-		SSLServerCertKeyFile    string `mapstructure:"ssl_server_certkey_file" env:"SSL_SERVER_CERTKEY_FILE" env-default:""`
-		SSLTrustedCAFile        string `mapstructure:"ssl_trusted_cafile" env:"SSL_TRUSTED_CA_FILE" env-default:""`
+		Host                        string `mapstructure:"host" env:"DISPATCHER2_HOST" env-default:"localhost"`
+		Port                        string `mapstructure:"http_port" env:"DISPATCHER2_SERVER_PORT" env-description:"Server port" env-default:"9090"`
+		ProxyPort                   string `mapstructure:"proxy_port" env:"DISPATCHER2_PROXY_PORT" env-description:"Server port" env-default:"9191"`
+		MaxRetries                  int    `mapstructure:"max_retries" env:"DISPATCHER2_MAX_RETRIES" env-default:"3"`
+		StartOfSubmissionPeriod     string `mapstructure:"start_submission_period" env:"START_SUBMISSION_PERIOD" env-default:"18"`
+		EndOfSubmissionPeriod       string `mapstructure:"end_submission_period" env:"END_SUBMISSION_PERIOD" env-default:"24"`
+		MaxConcurrent               int    `mapstructure:"max_concurrent" env:"DISPATCHER2_MAX_CONCURRENT" env-default:"5"`
+		RetryCronExpression         string `mapstructure:"retry_cron_expression"  env:"RETRY_CRON_EXPRESSION" env-description:"The request retry Cron Expression" env-default:"*/5 * * * *"`
+		RequestProcessInterval      int    `mapstructure:"request_process_interval" env:"REQUEST_PROCESS_INTERVAL" env-default:"4"`
+		Dhis2JobStatusCheckInterval int    `mapstructure:"dhis2_job_status_check_interval" env:"DHIS2_JOB_STATUS_CHECK_INTERVAL" env-description:"The DHIS2 job status check interval in seconds" env-default:"30"`
+		LogDirectory                string `mapstructure:"logdir" env:"DISPATCHER2_LOGDIR" env-default:"/var/log/dispatcher2"`
+		UseSSL                      string `mapstructure:"use_ssl" env:"DISPATCHER2_USE_SSL" env-default:""`
+		SSLClientCertKeyFile        string `mapstructure:"ssl_client_certkey_file" env:"SSL_CLIENT_CERTKEY_FILE" env-default:""`
+		SSLServerCertKeyFile        string `mapstructure:"ssl_server_certkey_file" env:"SSL_SERVER_CERTKEY_FILE" env-default:""`
+		SSLTrustedCAFile            string `mapstructure:"ssl_trusted_cafile" env:"SSL_TRUSTED_CA_FILE" env-default:""`
+		TimeZone                    string `mapstructure:"timezone" env:"DISPATCHER2_TIMEZONE" env-default:"Africa/Kampala" env-description:"The time zone used for this dispatcher2 deployment"`
 	} `yaml:"server"`
 
 	API struct {

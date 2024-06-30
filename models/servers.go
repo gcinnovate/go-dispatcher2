@@ -180,6 +180,9 @@ func (s *Server) CreatedOn() time.Time { return s.s.Created }
 // UpdatedOn return time when server/app was updated
 func (s *Server) UpdatedOn() time.Time { return s.s.Updated }
 
+// URLParams returns the server URL parameters
+func (s *Server) URLParams() dbutils.MapAnything { return s.s.URLParams }
+
 // CompleteURL returns server URL plus its URLParams
 func (s *Server) CompleteURL() string {
 	p := url.Values{}

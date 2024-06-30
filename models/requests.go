@@ -8,6 +8,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
+	db2 "go-dispatcher2/db"
 	// "go-dispatcher2/config"
 	"go-dispatcher2/utils"
 	"go-dispatcher2/utils/dbutils"
@@ -27,54 +28,54 @@ type RequestStatus string
 
 // constants for the status
 const (
-	RequestStatusReady = RequestStatus("ready")
-	// RequestStatusPending   = RequestStatus("pending")
+	RequestStatusReady     = RequestStatus("ready")
 	RequestStatusExpired   = RequestStatus("expired")
 	RequestStatusCompleted = RequestStatus("completed")
 	RequestStatusFailed    = RequestStatus("failed")
-	// RequestStatusError     = RequestStatus("error")
-	// RequestStatusIgnored   = RequestStatus("ignored")
-	RequestStatusCanceled = RequestStatus("canceled")
+	RequestStatusCanceled  = RequestStatus("canceled")
 )
 
 // Request represents our requests queue in the database
 type Request struct {
 	r struct {
-		ID                     RequestID     `db:"id" json:"-"`
-		UID                    string        `db:"uid" json:"uid"`
-		BatchID                string        `db:"batchid" json:"batchId,omitempty"`
-		DependsOn              dbutils.Int   `db:"depends_on" json:"dependsOn,omitempty"`
-		Source                 int           `db:"source" json:"source" validate:"required"`
-		Destination            int           `db:"destination" json:"destination" validate:"required"`
-		CCServers              pq.Int64Array `db:"cc_servers" json:"CCServers,omitempty"`
-		CCServersStatus        dbutils.JSON  `db:"cc_servers_status" json:"CCServersStatus,omitempty"`
-		ContentType            string        `db:"ctype" json:"contentType,omitempty" validate:"required"`
-		Body                   string        `db:"body" json:"body" validate:"required"`
-		Response               string        `db:"response" json:"response,omitempty"`
-		Status                 RequestStatus `db:"status" json:"status,omitempty"`
-		StatusCode             string        `db:"statuscode" json:"statusCode,omitempty"`
-		Retries                int           `db:"retries" json:"retries,omitempty"`
-		Errors                 string        `db:"errors" json:"errors,omitempty"`
-		InSubmissoinPeriodbool bool          `db:"in_submission_period" json:"-"`
-		FrequencyType          string        `db:"frequency_type" json:"frequencyType,omitempty"`
-		Period                 string        `db:"period" json:"period,omitempty"`
-		Day                    string        `db:"day" json:"day,omitempty"`
-		Week                   string        `db:"week" json:"week,omitempty"`
-		Month                  string        `db:"month" json:"month,omitempty"`
-		Year                   string        `db:"year" json:"year,omitempty"`
-		MSISDN                 string        `db:"msisdn" json:"msisdn,omitempty"`
-		RawMsg                 string        `db:"raw_msg" json:"rawMsg,omitempty"`
-		Facility               string        `db:"facility" json:"facility,omitempty"`
-		District               string        `db:"district" json:"district,omitempty"`
-		ReportType             string        `db:"report_type" json:"reportType,omitempty" validate:"required"` // type of object eg event, enrollment, datavalues
-		ObjectType             string        `db:"object_type" json:"objectType,omitempty"`                     // type of report as in source system
-		Extras                 string        `db:"extras" json:"extras,omitempty"`
-		Suspended              bool          `db:"suspended" json:"suspended,omitempty"`                   // whether request is suspended
-		BodyIsQueryParams      bool          `db:"body_is_query_param" json:"bodyIsQueryParams,omitempty"` // whether body is to be used a query parameters
-		SubmissionID           string        `db:"submissionid" json:"submissionId,omitempty"`             // a reference ID is source system
-		URLSuffix              string        `db:"url_suffix" json:"urlSuffix,omitempty"`
-		Created                time.Time     `db:"created" json:"created,omitempty"`
-		Updated                time.Time     `db:"updated" json:"updated,omitempty"`
+		ID                 RequestID     `db:"id" json:"-"`
+		UID                string        `db:"uid" json:"uid"`
+		BatchID            string        `db:"batchid" json:"batchId,omitempty"`
+		DependsOn          dbutils.Int   `db:"depends_on" json:"dependsOn,omitempty"`
+		Source             int           `db:"source" json:"source" validate:"required"`
+		Destination        int           `db:"destination" json:"destination" validate:"required"`
+		CCServers          pq.Int64Array `db:"cc_servers" json:"CCServers,omitempty"`
+		CCServersStatus    dbutils.JSON  `db:"cc_servers_status" json:"CCServersStatus,omitempty"`
+		ContentType        string        `db:"ctype" json:"contentType,omitempty" validate:"required"`
+		Body               string        `db:"body" json:"body" validate:"required"`
+		Response           string        `db:"response" json:"response,omitempty"`
+		Status             RequestStatus `db:"status" json:"status,omitempty"`
+		StatusCode         string        `db:"statuscode" json:"statusCode,omitempty"`
+		Retries            int           `db:"retries" json:"retries,omitempty"`
+		Errors             string        `db:"errors" json:"errors,omitempty"`
+		InSubmissionPeriod bool          `db:"in_submission_period" json:"-"`
+		FrequencyType      string        `db:"frequency_type" json:"frequencyType,omitempty"`
+		Period             string        `db:"period" json:"period,omitempty"`
+		Day                string        `db:"day" json:"day,omitempty"`
+		Week               string        `db:"week" json:"week,omitempty"`
+		Month              string        `db:"month" json:"month,omitempty"`
+		Year               string        `db:"year" json:"year,omitempty"`
+		MSISDN             string        `db:"msisdn" json:"msisdn,omitempty"`
+		RawMsg             string        `db:"raw_msg" json:"rawMsg,omitempty"`
+		Facility           string        `db:"facility" json:"facility,omitempty"`
+		District           string        `db:"district" json:"district,omitempty"`
+		ReportType         string        `db:"report_type" json:"reportType,omitempty" validate:"required"` // type of object eg event, enrollment, datavalues
+		ObjectType         string        `db:"object_type" json:"objectType,omitempty"`                     // type of report as in source system
+		Extras             string        `db:"extras" json:"extras,omitempty"`
+		Suspended          bool          `db:"suspended" json:"suspended,omitempty"`                   // whether request is suspended
+		BodyIsQueryParams  bool          `db:"body_is_query_param" json:"bodyIsQueryParams,omitempty"` // whether body is to be used a query parameters
+		SubmissionID       string        `db:"submissionid" json:"submissionId,omitempty"`             // a reference ID is source system
+		URLSuffix          string        `db:"url_suffix" json:"urlSuffix,omitempty"`
+		AsyncJobID         string        `db:"async_jobid" json:"AsyncJobID,omitempty"`
+		AsyncResponse      string        `db:"async_response" json:"AsyncResponse,omitempty"`
+		AsyncStatus        string        `db:"async_status" json:"AsyncStatus,omitempty"`
+		Created            time.Time     `db:"created" json:"created,omitempty"`
+		Updated            time.Time     `db:"updated" json:"updated,omitempty"`
 		// OrgID              OrgID         `db:"org_id" json:"org_id"` // Lets add these later
 	}
 }
@@ -360,4 +361,22 @@ func (rq *RequestForm) Save(db *sqlx.DB) (Request, error) {
 	}
 	_ = rows.Close()
 	return *req, nil
+}
+
+func ClearBatchRequests(batch string) {
+	db := db2.GetDB()
+	log.WithField("BatchID", batch).Info("Clearing batch requests")
+	_, err := db.Exec("DELETE FROM requests WHERE batchid = $1", batch)
+	if err != nil {
+		log.WithError(err).Error("Failed to delete batch requests")
+	}
+}
+
+func ClearDistrictRequests(district string) {
+	db := db2.GetDB()
+	log.WithField("BatchID", district).Info("Clearing district requests")
+	_, err := db.Exec("DELETE FROM requests WHERE district = $1", district)
+	if err != nil {
+		log.WithError(err).Error("Failed to delete district requests")
+	}
 }
