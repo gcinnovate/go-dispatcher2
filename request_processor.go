@@ -69,7 +69,7 @@ type RequestObject struct {
 	Response           string               `db:"response"`
 	Retries            int                  `db:"retries"`
 	InSubmissionPeriod bool                 `db:"in_submission_period"`
-	ContentType        string               `db:"ctype"`
+	ContentType        string               `db:"content_type"`
 	ObjectType         string               `db:"object_type"`
 	BodyIsQueryParams  bool                 `db:"body_is_query_param"`
 	SubmissionID       string               `db:"submissionid"`
@@ -363,7 +363,7 @@ func (r *RequestObject) sendRequest(destination models.Server) (*http.Response, 
 		"server":  destination.ID(),
 		"url":     completeURL,
 	}).Info("Sending request to destination server")
-	req, err := http.NewRequest(destination.HTTPMethod(), destURL, bytes.NewReader(marshalled))
+	req, err := http.NewRequest(destination.HTTPMethod(), completeURL, bytes.NewReader(marshalled))
 
 	switch destination.AuthMethod() {
 	case "Token":
@@ -489,6 +489,7 @@ func Consume(db *sqlx.DB, worker int, jobs <-chan int, wg *sync.WaitGroup, mutex
                 WHERE id = $1 FOR UPDATE NOWAIT`, req).StructScan(&reqObj)
 		if err != nil {
 			log.WithError(err).Error("Error reading request for processing")
+			return
 		}
 		log.WithFields(log.Fields{
 			"worker":    worker,
@@ -650,21 +651,91 @@ func ProcessRequest(tx *sqlx.Tx, reqObj RequestObject, destination models.Server
 				}
 			}
 		} else {
-			// var result map[string]interface{}
-			// json.NewDecoder(resp.Body).Decode(&result)
+			// We are using Async
+
 			bodyBytes, err := io.ReadAll(resp.Body)
 			if err != nil {
 				reqObj.WithStatus(models.RequestStatusFailed).updateRequestStatus(tx)
 				log.WithError(err).Error("Could not read response")
 				return err
 			}
-			log.WithField("responseBytes", bodyBytes).Info("Response Payload")
+			log.WithField("responseBytes", string(bodyBytes)).Info("Response Payload")
 			if resp.StatusCode/100 == 2 {
 				v, _, _, err := jsonparser.Get(bodyBytes, "status")
 				if err != nil {
 					log.WithError(err).Error("No status field found by jsonparser")
 				}
 				fmt.Println(v)
+				jobId, err := jsonparser.GetString(bodyBytes, "response", "id")
+				if err != nil {
+					log.WithError(err).Error("No job id found by jsonparser in asyn response")
+					return err
+				}
+				jobType, _ := jsonparser.GetString(bodyBytes, "response", "jobType")
+				// Create Async Schedule
+				scheduleId, err := models.CreateAsyncJobSchedule(
+					tx, reqObj.ID, destination.ID(), serverInCC, jobType, jobId)
+				if err != nil {
+					log.WithError(err).Error("Failed to create async job schedule")
+					return err
+				}
+				log.WithFields(log.Fields{
+					"scheduleID": scheduleId, "requestID": reqObj.ID}).Info("Created Async Job Schedule")
+				if serverInCC {
+					serverStatus := reqObj.CCServersStatus[fmt.Sprintf("%d", destination.ID())].(map[string]interface{})
+					summary := fmt.Sprintf("Async job sent to server")
+					newServerStatus := make(map[string]interface{})
+					newServerStatus["errors"] = summary
+					newServerStatus["status"] = models.RequestStatusCompleted
+					newServerStatus["statusCode"] = fmt.Sprintf("%d", resp.StatusCode)
+					switch serverStatus["retries"].(type) {
+					case float64:
+						newServerStatus["retries"] = int(serverStatus["retries"].(float64) + 1)
+					case int:
+						newServerStatus["retries"] = serverStatus["retries"].(int) + 1
+					}
+					reqObj.CCServersStatus[fmt.Sprintf("%d", destination.ID())] = newServerStatus
+					// reqObj.updateCCServerStatus(tx)
+					_, _ = tx.NamedExec(`UPDATE requests SET cc_servers_status = :cc_servers_status WHERE id = :id`, reqObj)
+
+				} else {
+					summary := fmt.Sprintf("Async job sent to server")
+					reqObj.StatusCode = fmt.Sprintf("%d", resp.StatusCode)
+					reqObj.Errors = summary
+					reqObj.Retries += 1
+					reqObj.Status = models.RequestStatusCompleted
+					reqObj.updateRequest(tx)
+					reqObj.WithStatus(models.RequestStatusCompleted).updateRequestStatus(tx)
+				}
+			} else {
+				log.WithFields(log.Fields{
+					"requestID": reqObj.ID, "responseStatus": resp.StatusCode, "ServerInCC": serverInCC,
+				}).Warn("A non 200 response from async request")
+
+				if serverInCC {
+					serverStatus := reqObj.CCServersStatus[fmt.Sprintf("%d", destination.ID())].(map[string]interface{})
+					newServerStatus := make(map[string]interface{})
+					newServerStatus["status"] = "failed"
+					newServerStatus["statusCode"] = fmt.Sprintf("%d", resp.StatusCode)
+					switch serverStatus["retries"].(type) {
+					case float64:
+						newServerStatus["retries"] = int(serverStatus["retries"].(float64) + 1)
+					case int:
+						newServerStatus["retries"] = serverStatus["retries"].(int) + 1
+					}
+					newServerStatus["errors"] = "server possibly unreachable"
+					reqObj.CCServersStatus[fmt.Sprintf("%d", destination.ID())] = newServerStatus
+					_, _ = tx.NamedExec(`UPDATE requests SET cc_servers_status = :cc_servers_status WHERE id = :id`, reqObj)
+
+				} else {
+					reqObj.StatusCode = fmt.Sprintf("%d", resp.StatusCode)
+					reqObj.Status = models.RequestStatusFailed
+					reqObj.Errors = "request might have conflicts while async request"
+					reqObj.Retries += 1
+					reqObj.Response = string(bodyBytes)
+					reqObj.updateRequest(tx)
+				}
+
 			}
 
 		}

@@ -106,6 +106,7 @@ func ProcessSchedule(db *sqlx.DB, id int64) {
 		if err != nil {
 			log.WithError(err).Error("Failed to check dhis2 async job")
 		}
+		// Get server tied to schedule
 		schedule.Status = "completed"
 		schedule.Updated = time.Now().In(models.Location)
 		err = models.UpdateScheduleTx(tx, schedule)

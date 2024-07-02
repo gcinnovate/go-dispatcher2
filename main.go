@@ -40,6 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	LoadServersFromConfigFiles(config.ServersConfigMap)
 
 	go func() {
 		// Create a new scheduler

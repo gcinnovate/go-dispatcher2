@@ -191,6 +191,7 @@ CREATE TABLE schedules(
     next_run_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     status text NOT NULL DEFAULT 'ready' CHECK(status IN ('ready', 'skipped', 'sent','failed','error', 'completed')),
     is_active BOOLEAN NOT NULL DEFAULT 't',
+    async_job_type TEXT DEFAULT '',
     async_jobid TEXT DEFAULT '', -- if it is an async job
     request_id BIGINT REFERENCES requests(id),
     server_id BIGINT REFERENCES servers(id),

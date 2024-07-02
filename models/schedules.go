@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"go-dispatcher2/config"
@@ -63,6 +64,7 @@ type Schedule struct {
 	RequestID       *RequestID      `db:"request_id" json:"request_id,omitempty"`
 	ServerID        *ServerID       `db:"server_id" json:"serverID,omitempty"`
 	ServerInCC      *bool           `db:"server_in_cc" json:"ServerInCC,omitempty"`
+	AsyncJobType    string          `db:"async_job_type" json:"asyncJobType,omitempty"`
 	AsyncJobID      string          `db:"async_jobid" json:"asyncJobID,omitempty"`
 	CreatedBy       *int64          `db:"created_by" json:"createdBy,omitempty"` // Use pointer for nullable fields
 	Created         time.Time       `db:"created" json:"created,omitempty"`
@@ -72,10 +74,12 @@ type Schedule struct {
 const createScheduleSQL = `INSERT INTO 
 	schedules (sched_type, params, sched_url, sched_content, command, command_args,
 		repeat, repeat_interval, cron_expression, next_run_at, status, is_active,
+		async_job_type, async_jobid,
 		created_by, created, updated) 
 	VALUES (
 		:sched_type, :params, :sched_url, :sched_content, :command, :command_args,
 		:repeat, :repeat_interval, :cron_expression, :next_run_at, :status, :is_active,
+		:async_job_type, :async_jobid,
 		:created_by, :created, :updated
 	) RETURNING id`
 
@@ -207,31 +211,69 @@ func CreateAsyncJobSchedule(
 	request RequestID,
 	server ServerID,
 	serverInCC bool,
-	jobURL string,
+	jobType string,
 	jobID string,
 ) (int64, error) {
 	repeatInterval := config.Dispatcher2Conf.Server.Dhis2JobStatusCheckInterval
 	var schedule = Schedule{
-		ScheduleType:    "dhis2_async_job_check",
-		ScheduleURL:     jobURL,
-		ScheduleContent: "",
-		Repeat:          "interval",
-		RepeatInterval:  repeatInterval,
-		NextRunAt:       time.Now().Add(time.Second * time.Duration(repeatInterval)),
-		Status:          "ready",
-		IsActive:        true,
-		RequestID:       &request,
-		ServerID:        &server,
-		ServerInCC:      &serverInCC,
-		AsyncJobID:      jobID,
-		CreatedBy:       nil,
-		Created:         time.Now().In(Location),
-		Updated:         time.Now().In(Location),
+		Params:         []byte("{}"),
+		ScheduleType:   "dhis2_async_job_check",
+		Repeat:         "interval",
+		RepeatInterval: repeatInterval,
+		NextRunAt:      time.Now().Add(time.Second * time.Duration(repeatInterval)),
+		Status:         "ready",
+		IsActive:       true,
+		RequestID:      &request,
+		ServerID:       &server,
+		ServerInCC:     &serverInCC,
+		AsyncJobType:   jobType,
+		AsyncJobID:     jobID,
+		CreatedBy:      nil,
+		Created:        time.Now().In(Location),
+		Updated:        time.Now().In(Location),
 	}
 	return CreateScheduleTx(tx, schedule)
 
 }
 
 func CheckDhis2AsyncJob(tx *sqlx.Tx, schedule Schedule) error {
+	//if server, ok := ServerMap[fmt.Sprintf("%d", schedule.ServerID)]; ok {
+	//
+	//}
+	if schedule.ServerID != nil {
+		server := GetServerByID(int64(*schedule.ServerID))
+		client, err := server.NewClient()
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id": *schedule.ServerID,
+				"error":     err,
+			}).Error("Could not get client for server!")
+			return err
+		}
+		resource := fmt.Sprintf(
+			"system/taskSummaries/%s/%s",
+			schedule.AsyncJobType,
+			schedule.AsyncJobID,
+		)
+		params := map[string]string{}
+		resp, err := client.GetResource(resource, params)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id":   *schedule.ServerID,
+				"schedule_id": schedule.ID,
+				"job_id":      schedule.AsyncJobID,
+				"error":       err,
+			}).Error("Could not get task summary for async job!")
+			return err
+		}
+		var taskSummary AsyncJobImportSummary
+		err = json.Unmarshal(resp.Body(), &taskSummary)
+		if err != nil {
+			log.WithError(err).Error("Failed to unmarshall response taskSummary!")
+			return err
+		}
+		log.WithField("TaskSummary", taskSummary).Debug("TaskSummary")
+
+	}
 	return nil
 }

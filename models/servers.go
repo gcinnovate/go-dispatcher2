@@ -199,17 +199,17 @@ func (s *Server) CompleteURL() string {
 }
 
 // GetServerByID returns server object using id
-//func GetServerByID(id int64) Server {
-//	srv := Server{}
-//	err := db.GetDB().Get(&srv.s, "SELECT * FROM servers WHERE id = $1", id)
-//
-//	if err != nil {
-//		fmt.Printf("Error geting server: [%v]", err)
-//		return Server{}
-//	}
-//	return srv
-//
-//}
+func GetServerByID(id int64) Server {
+	srv := Server{}
+	err := db.GetDB().Get(&srv.s, "SELECT * FROM servers WHERE id = $1", id)
+
+	if err != nil {
+		fmt.Printf("Error getting server: [%v]", err)
+		return Server{}
+	}
+	return srv
+
+}
 
 // GetServerByName returns server object using id
 func GetServerByName(name string) (Server, error) {
@@ -353,9 +353,9 @@ func GetServers(db *sqlx.DB, page string, pageSize string,
 const insertServerSQL = `
 INSERT INTO servers(uid, name, username, password, url, ipaddress, http_method, auth_method, auth_token,
        callback_url, allow_callbacks, cc_urls, allow_copies, start_submission_period, end_submission_period,
-       parse_responses, use_ssl, suspended, ssl_client_certkey_file, json_response_xpath, xml_response_xpath, endpoint_type, url_params)
-       VALUES (:uid,:name,:username,:password,:url,:ipaddress,:http_method,:auth_method,:auth_token, :callback_url,:allow_callbacks, 
-               :cc_urls,:allow_copies,:start_submission_period,:end_submission_period,:parse_responses,:use_ssl,
+       parse_responses, use_async, use_ssl, suspended, ssl_client_certkey_file, json_response_xpath, xml_response_xpath, endpoint_type, url_params)
+       VALUES (generate_uid(),:name,:username,:password,:url,:ipaddress,:http_method,:auth_method,:auth_token, :callback_url,:allow_callbacks, 
+               :cc_urls,:allow_copies,:start_submission_period,:end_submission_period,:parse_responses,:use_async, :use_ssl,
                :suspended,:ssl_client_certkey_file,:json_response_xpath,:xml_response_xpath, :endpoint_type, :url_params)
 	RETURNING id
 `
@@ -376,9 +376,9 @@ func NewServer(c *gin.Context, db *sqlx.DB) (Server, error) {
 		log.WithField("Content-Type", contentType).Error("Unsupported content-Type")
 		return *srv, errors.New(fmt.Sprintf("Unsupported Content-Type: %s", contentType))
 	}
-	if !srv.ValidateUID() {
-		srv.SetUID(utils.GetUID())
-	}
+	//if !srv.ValidateUID() {
+	//	srv.SetUID(utils.GetUID())
+	//}
 	if srv.ExistsInDB() {
 		log.WithField("Server Name", srv.s.Name).Info("Server with same name already exists!")
 		srv.s.UID = GetServerUIDByName(srv.Name())
@@ -463,9 +463,9 @@ func CreateServerFromJSON(db *sqlx.DB, serverJSON []byte) (Server, error) {
 const updateServerSQL = `
 UPDATE servers SET (name, username, password, url, ipaddress, http_method,auth_method, auth_token,
        callback_url, allow_callbacks, cc_urls, allow_copies, start_submission_period, end_submission_period,
-       parse_responses, use_ssl, suspended, ssl_client_certkey_file, json_response_xpath, xml_response_xpath, endpoint_type, url_params)
+       parse_responses, use_async, use_ssl, suspended, ssl_client_certkey_file, json_response_xpath, xml_response_xpath, endpoint_type, url_params)
 	= (:name,:username,:password,:url,:ipaddress,:http_method,:auth_method,:auth_token, :callback_url,:allow_callbacks, 
-               :cc_urls,:allow_copies,:start_submission_period,:end_submission_period,:parse_responses,:use_ssl,
+               :cc_urls,:allow_copies,:start_submission_period,:end_submission_period,:parse_responses, :use_async, :use_ssl,
                :suspended,:ssl_client_certkey_file,:json_response_xpath,:xml_response_xpath, :endpoint_type, :url_params)
 	WHERE uid = :uid
 `
