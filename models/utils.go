@@ -33,6 +33,7 @@ func (s *Server) NewClient() (*Client, error) {
 	client.SetHeaders(map[string]string{
 		"Accept":       "application/json",
 		"Content-Type": "application/json",
+		"User-Agent":   "Dispatcher2-Go",
 	})
 	switch s.AuthMethod() {
 	case "Basic":

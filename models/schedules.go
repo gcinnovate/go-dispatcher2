@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
 	"go-dispatcher2/config"
 	"time"
@@ -74,12 +75,12 @@ type Schedule struct {
 const createScheduleSQL = `INSERT INTO 
 	schedules (sched_type, params, sched_url, sched_content, command, command_args,
 		repeat, repeat_interval, cron_expression, next_run_at, status, is_active,
-		async_job_type, async_jobid,
+		async_job_type, async_jobid, request_id, server_id, server_in_cc,
 		created_by, created, updated) 
 	VALUES (
 		:sched_type, :params, :sched_url, :sched_content, :command, :command_args,
 		:repeat, :repeat_interval, :cron_expression, :next_run_at, :status, :is_active,
-		:async_job_type, :async_jobid,
+		:async_job_type, :async_jobid, :request_id, :server_id, :server_in_cc,
 		:created_by, :created, :updated
 	) RETURNING id`
 
@@ -155,7 +156,7 @@ func UpdateScheduleTx(tx *sqlx.Tx, schedule Schedule) error {
 // SetNextRun set the next time the schedule will run
 func (s *Schedule) SetNextRun(tx *sqlx.Tx, nextRun time.Time) error {
 	s.NextRunAt = nextRun
-	_, err := tx.NamedExec(`UPDATE schedules SET next_run_at = :last_run_at WHERE id = :id`, s)
+	_, err := tx.NamedExec(`UPDATE schedules SET next_run_at = :next_run_at WHERE id = :id`, s)
 	return err
 }
 
@@ -276,4 +277,92 @@ func CheckDhis2AsyncJob(tx *sqlx.Tx, schedule Schedule) error {
 
 	}
 	return nil
+}
+
+func CheckDhis2AsyncJobTaskSummary(tx *sqlx.Tx, schedule Schedule) (*AsyncJobImportSummary, error) {
+	//if server, ok := ServerMap[fmt.Sprintf("%d", schedule.ServerID)]; ok {
+	//
+	//}
+	var taskSummary *AsyncJobImportSummary
+	if *schedule.ServerID > 0 {
+		server := GetServerByID(int64(*schedule.ServerID))
+
+		client, err := server.NewClient()
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id": *schedule.ServerID,
+				"error":     err,
+			}).Error("Could not get client for server!")
+			return taskSummary, err
+		}
+		resource := fmt.Sprintf(
+			"system/taskSummaries/%s/%s",
+			schedule.AsyncJobType,
+			schedule.AsyncJobID,
+		)
+		params := map[string]string{}
+		resp, err := client.GetResource(resource, params)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id":   *schedule.ServerID,
+				"schedule_id": schedule.ID,
+				"job_id":      schedule.AsyncJobID,
+				"error":       err,
+			}).Error("Could not get task summary for async job!")
+			return taskSummary, err
+		}
+		// var taskSummary AsyncJobImportSummary
+		err = json.Unmarshal(resp.Body(), &taskSummary)
+		if err != nil {
+			log.WithError(err).Error("Failed to unmarshall response taskSummary!")
+			return taskSummary, err
+		}
+		//  log.WithField("TaskSummary", taskSummary).Info("TaskSummary")
+
+	}
+	return taskSummary, nil
+}
+
+// CheckDhis2AsyncJobStatus checks the status of an async job
+func CheckDhis2AsyncJobStatus(schedule Schedule) (bool, bool, error) {
+	if *schedule.ServerID > 0 {
+		server := GetServerByID(int64(*schedule.ServerID))
+		client, err := server.NewClient()
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id": *schedule.ServerID,
+				"error":     err,
+			}).Error("Could not get client for server!")
+			return false, false, err
+		}
+		resource := fmt.Sprintf(
+			"system/tasks/%s/%s",
+			schedule.AsyncJobType,
+			schedule.AsyncJobID,
+		)
+		params := map[string]string{}
+		resp, err := client.GetResource(resource, params)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"server_id":   *schedule.ServerID,
+				"schedule_id": schedule.ID,
+				"job_id":      schedule.AsyncJobID,
+				"error":       err,
+			}).Error("Could not get task status for async job!")
+			return false, false, err
+		}
+		var taskStatus []AsyncJobStatus
+		err = json.Unmarshal(resp.Body(), &taskStatus)
+		if err != nil {
+			log.WithError(err).Error("Failed to unmarshall response taskStatus!")
+			return false, false, err
+		}
+		// use lo to find if any AsyncJobStatus in taskStatus slice has completed == true and return true, nil
+		return len(lo.Filter(taskStatus, func(item AsyncJobStatus, _ int) bool {
+			return item.Completed
+		})) > 0, len(taskStatus) > 0, nil
+
+	}
+
+	return false, false, nil
 }

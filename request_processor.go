@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/buger/jsonparser"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/gjson"
 	"go-dispatcher2/config"
 	"go-dispatcher2/db"
 	"go-dispatcher2/models"
@@ -88,6 +88,12 @@ const updateStatusSQL = `
 	UPDATE requests SET (status,  updated) = (:status, current_timestamp)
 	WHERE id = :id`
 
+const selectRequestObjectSQL = `
+SELECT id, source, destination, depends_on, cc_servers, cc_servers_status, body, 
+	response, retries, ctype, object_type, body_is_query_param, submissionid, 
+	url_suffix, suspended, status, statuscode, errors
+FROM requests WHERE id = $1;`
+
 // HasDependency returns true if request has a request it depends on
 func (r *RequestObject) HasDependency() bool {
 	return r.DependsOn > 0
@@ -105,6 +111,16 @@ func (r *RequestObject) DependencyCompleted(tx *sqlx.Tx) bool {
 		return completed
 	}
 	return false
+}
+
+// GetRequestObjectById returns the requested object
+func GetRequestObjectById(db *sqlx.DB, id models.RequestID) (*RequestObject, error) {
+	var request RequestObject
+	err := db.Get(&request, selectRequestObjectSQL, id)
+	if err != nil {
+		return &RequestObject{}, err
+	}
+	return &request, nil
 }
 
 // updateRequest is used by consumers to update request in the db
@@ -661,17 +677,20 @@ func ProcessRequest(tx *sqlx.Tx, reqObj RequestObject, destination models.Server
 			}
 			log.WithField("responseBytes", string(bodyBytes)).Info("Response Payload")
 			if resp.StatusCode/100 == 2 {
-				v, _, _, err := jsonparser.Get(bodyBytes, "status")
+				// v, _, _, err := jsonparser.Get(bodyBytes, "status")
+				v := gjson.Get(string(bodyBytes), "status").String()
 				if err != nil {
 					log.WithError(err).Error("No status field found by jsonparser")
 				}
 				fmt.Println(v)
-				jobId, err := jsonparser.GetString(bodyBytes, "response", "id")
+				// jobId, err := jsonparser.GetString(bodyBytes, "response", "id")
+				jobId := gjson.Get(string(bodyBytes), "response.id").String()
 				if err != nil {
 					log.WithError(err).Error("No job id found by jsonparser in asyn response")
 					return err
 				}
-				jobType, _ := jsonparser.GetString(bodyBytes, "response", "jobType")
+				// jobType, _ := jsonparser.GetString(bodyBytes, "response", "jobType")
+				jobType := gjson.Get(string(bodyBytes), "response.jobType").String()
 				// Create Async Schedule
 				scheduleId, err := models.CreateAsyncJobSchedule(
 					tx, reqObj.ID, destination.ID(), serverInCC, jobType, jobId)

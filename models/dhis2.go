@@ -159,6 +159,16 @@ type AsyncJobImportSummary struct {
 	ImportTime      string           `json:"importTime,omitempty"`
 }
 
+// AsyncJobStatus ..
+type AsyncJobStatus struct {
+	UID       string `json:"uid"`
+	Level     string `json:"level"`
+	Category  string `json:"category"`
+	Time      string `json:"time"`
+	Message   string `json:"message"`
+	Completed bool   `json:"completed"`
+}
+
 // Status returns the response Status
 func (b *DataValuesResponse) Status() string { return b.b.Status }
 

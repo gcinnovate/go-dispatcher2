@@ -26,35 +26,58 @@ func ProduceSchedules(
 	db *sqlx.DB,
 	jobs chan<- int64,
 	wg *sync.WaitGroup,
-	workingOnMutex *sync.RWMutex,
+	workingOnMutex *sync.Mutex,
 	workingOn map[int64]bool,
 ) {
 	defer wg.Done()
 	log.Info("..:::.. Starting to produce due schedules..:::..")
-	dbConn, err := sqlx.Connect("postgres", config.Dispatcher2Conf.Database.URI)
-	if err != nil {
-		log.Fatalln("Schedule producer failed to connect to database: %v", err)
-	}
+
 	for {
-		ids, err := getDueSchedules(dbConn)
+		rows, err := db.Queryx(dueSchedulesSQL)
 		if err != nil {
-			log.WithError(err).Error("Error fetching due schedules:", err)
-			time.Sleep(1 * time.Minute)
-			continue
+			log.WithError(err).Error("ERROR READING READY SCHEDULES!!!")
 		}
-		schedulesCount := len(ids)
-		for _, id := range ids {
+
+		var schedulesCount = 0
+		for rows.Next() {
+			schedulesCount += 1
+			var scheduleID int64
+			err = rows.Scan(&scheduleID)
+			if err != nil {
+				log.WithError(err).Error("Error reading schedule from queue:")
+			}
+			jobs <- scheduleID
 			workingOnMutex.Lock()
-			if !workingOn[id] {
-				workingOn[id] = true
-				jobs <- id
+			if _, exists := workingOn[scheduleID]; exists {
+				log.WithField("scheduleID", scheduleID).Info("Schedule already in dynamic queue")
+				continue
 			}
 			workingOnMutex.Unlock()
+			go func(sched int64) {
+				// Let see if we can recover from panics XXX
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Println("Recovered in Produce", r)
+
+					}
+				}()
+				workingOnMutex.Lock()
+				defer workingOnMutex.Unlock()
+
+				jobs <- sched
+				workingOn[sched] = true
+				log.Info(fmt.Sprintf("Added Schedule [id: %v]", sched))
+			}(scheduleID)
 		}
+		if err := rows.Err(); err != nil {
+			log.WithError(err).Error("Error reading schedules")
+		}
+		_ = rows.Close()
 		if schedulesCount > 0 {
-			log.WithField("ScheduledCount", schedulesCount).Info("Schedules produced")
+			log.WithField("scheduleAdded", schedulesCount).Info("Fetched Schedules")
 		}
-		log.Info(fmt.Sprintf("Schedule producer going to sleep for: %v", config.Dispatcher2Conf.Server.RequestProcessInterval))
+
+		// log.Info(fmt.Sprintf("Schedule producer going to sleep for: %v", config.AirQoIntegratorConf.Server.RequestProcessInterval))
 		time.Sleep(
 			time.Duration(config.Dispatcher2Conf.Server.RequestProcessInterval) * time.Second)
 	}
@@ -102,16 +125,82 @@ func ProcessSchedule(db *sqlx.DB, id int64) {
 
 	switch schedule.ScheduleType {
 	case "dhis2_async_job_check":
-		err = models.CheckDhis2AsyncJob(tx, schedule)
-		if err != nil {
-			log.WithError(err).Error("Failed to check dhis2 async job")
-		}
-		// Get server tied to schedule
-		schedule.Status = "completed"
-		schedule.Updated = time.Now().In(models.Location)
-		err = models.UpdateScheduleTx(tx, schedule)
-		if err != nil {
-			log.WithError(err).Error("Failed to update schedule")
+		completed, exists, _ := models.CheckDhis2AsyncJobStatus(schedule)
+		if completed {
+			taskSummary, err := models.CheckDhis2AsyncJobTaskSummary(tx, schedule)
+			if err != nil {
+				log.WithError(err).Errorf("Failed to check dhis2 async job: Schedule ID: %v", schedule.ID)
+			} else {
+				schedule.Status = "completed"
+				schedule.Updated = time.Now().In(models.Location)
+				err = models.UpdateScheduleTx(tx, schedule)
+				if err != nil {
+					log.WithError(err).Error("Failed to update schedule")
+				}
+				// log.Infof("Schedule updated successfully: %v", taskSummary)
+				reqObj, er := GetRequestObjectById(db, *schedule.RequestID)
+				log.Infof("REQUEST OBJECT: %v, !Nil? %v", reqObj, reqObj != nil)
+				if er == nil && reqObj != nil {
+					if *schedule.ServerInCC {
+						log.Infof("XXXXXX")
+						serverStatus := reqObj.CCServersStatus[fmt.Sprintf("%d", reqObj.Destination)].(map[string]interface{})
+						summary := fmt.Sprintf(
+							"Imported: %d, Updated: %d, Ignored: %d, Deleted: %d, Total: %d",
+							taskSummary.ImportCount.Imported,
+							taskSummary.ImportCount.Updated,
+							taskSummary.ImportCount.Ignored,
+							taskSummary.ImportCount.Deleted,
+							taskSummary.ImportCount.Total)
+						newServerStatus := make(map[string]interface{})
+						newServerStatus["errors"] = summary
+						newServerStatus["status"] = models.RequestStatusCompleted
+						// newServerStatus["statusCode"] = fmt.Sprintf("%d", resp.StatusCode)
+						switch serverStatus["retries"].(type) {
+						case float64:
+							newServerStatus["retries"] = int(serverStatus["retries"].(float64) + 1)
+						case int:
+							newServerStatus["retries"] = serverStatus["retries"].(int) + 1
+						}
+						reqObj.CCServersStatus[fmt.Sprintf("%d", reqObj.Destination)] = newServerStatus
+						// reqObj.updateCCServerStatus(tx)
+						_, _ = tx.NamedExec(`UPDATE requests SET cc_servers_status = :cc_servers_status WHERE id = :id`, reqObj)
+					} else {
+						reqObj.Retries += 1
+						if taskSummary.Status == "SUCCESS" {
+							reqObj.Status = models.RequestStatusCompleted
+							reqObj.Errors = fmt.Sprintf(
+								"Imported: %d, Updated: %d, Ignored: %d, Deleted: %d, Total: %d",
+								taskSummary.ImportCount.Imported,
+								taskSummary.ImportCount.Updated,
+								taskSummary.ImportCount.Ignored,
+								taskSummary.ImportCount.Deleted,
+								taskSummary.ImportCount.Total)
+						} else {
+							reqObj.Status = models.RequestStatusFailed
+							reqObj.Errors = fmt.Sprintf("%v", taskSummary.ImportConflicts)
+						}
+						reqObj.updateRequest(tx)
+					}
+				} else {
+					log.Infof("Request object not found while updating async request: %d", *schedule.RequestID)
+				}
+			}
+
+		} else {
+			if exists { // perhaps async request removed from server
+				schedule.Status = "ready"
+				nextRun := time.Now().Add(
+					time.Second * time.Duration(config.Dispatcher2Conf.Server.Dhis2JobStatusCheckInterval))
+				_ = schedule.SetNextRun(tx, nextRun)
+			} else {
+				schedule.Status = "expired"
+			}
+
+			schedule.Updated = time.Now().In(models.Location)
+			err = models.UpdateScheduleTx(tx, schedule)
+			if err != nil {
+				log.WithError(err).Error("Failed to update schedule::")
+			}
 		}
 	case "url":
 		log.Info("Handling URL schedule")

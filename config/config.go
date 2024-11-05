@@ -50,6 +50,14 @@ func init() {
 	flag.CommandLine.AddGoFlagSet(goflag.CommandLine)
 	flag.Parse()
 
+	viper.SetDefault("server.host", "localhost")
+	viper.SetDefault("server.port", "9090")
+	viper.SetDefault("server.dhis2_job_status_check_interval", 15)
+	viper.SetDefault("server.request_process_interval", 5)
+	viper.SetDefault("server.max_retries", 3)
+	viper.SetDefault("server.retry_cron_expression", "*/5 * * * *")
+	viper.SetDefault("server.timezone", "Africa/Kampala")
+
 	viper.SetConfigName("dispatcher2")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(configDir)

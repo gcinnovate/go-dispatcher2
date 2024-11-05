@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/robfig/cron/v3"
 	"os"
 	"sync"
 	"time"
@@ -9,7 +10,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-co-op/gocron"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"go-dispatcher2/config"
@@ -43,18 +43,19 @@ func main() {
 	LoadServersFromConfigFiles(config.ServersConfigMap)
 
 	go func() {
-		// Create a new scheduler
-		s := gocron.NewScheduler(time.UTC)
-		// Schedule the task to run "30 minutes after midn, 4am, 8am, 12pm..., everyday"
-
 		// retrying incomplete requests runs every 5 minutes
 		log.WithFields(log.Fields{"RetryCronExpression": config.Dispatcher2Conf.Server.RetryCronExpression}).Info(
 			"Request Retry Cron Expression")
-		_, err = s.Cron(config.Dispatcher2Conf.Server.RetryCronExpression).Do(RetryIncompleteRequests)
+		// Create a new scheduler
+		c := cron.New()
+		_, err := c.AddFunc(config.Dispatcher2Conf.Server.RetryCronExpression, func() {
+			RetryIncompleteRequests()
+		})
 		if err != nil {
 			log.WithError(err).Error("Error scheduling incomplete request retry task:")
 		}
-		s.StartAsync()
+		c.Start()
+
 	}()
 	/*Do proxy Stuff Here */
 	go func() {
@@ -85,14 +86,15 @@ func main() {
 	}
 	scheduledJobs := make(chan int64)
 	workingOn := make(map[int64]bool)
-	var workingOnMutex = &sync.RWMutex{}
+	var workingOnMutex = &sync.Mutex{}
+	var rWworkingOnMutex = &sync.RWMutex{}
 
 	if !*config.SkipScheduleProcessing {
 		wg.Add(1)
 		go ProduceSchedules(dbConn, scheduledJobs, &wg, workingOnMutex, workingOn)
 
 		wg.Add(1)
-		go StartScheduleConsumers(scheduledJobs, &wg, workingOnMutex, workingOn)
+		go StartScheduleConsumers(scheduledJobs, &wg, rWworkingOnMutex, workingOn)
 
 	}
 
